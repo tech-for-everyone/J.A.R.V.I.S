@@ -1,4 +1,4 @@
-# JARVIS Voice Assistant (this readme is outdated)
+# JARVIS Voice Assistant
 
 ![We are NOT limited by the technology of our time!](poster.jpg)
 
@@ -31,15 +31,29 @@ This are the neural networks we are currently using:
 	 - [Picovoice Porcupine](https://github.com/Picovoice/porcupine) via [official SDK](https://github.com/Picovoice/porcupine#rust) *(requires API key)*
 	 - [Vosk Speech Recognition Toolkit](https://github.com/alphacep/vosk-api) via [Vosk-rs](https://github.com/Bear-03/vosk-rs) *(very slow)*
 	 - [~~Snowboy~~](https://github.com/Kitt-AI/snowboy) *(currently not used)*
- - NLU
-	 - Nothing yet.
+ - NLU / intent classification
+	 - [intent-classifier](https://crates.io/crates/intent-classifier) crate
+	 - embedding-based classification via [fastembed](https://github.com/Priler/fastembed) (e.g. all-MiniLM-L6-v2)
+ - Slot extraction
+	 - [GLiNER](https://github.com/urchade/GLiNER) models (via ONNX Runtime)
 - Chat
 	- [~~ChatGPT~~](https://chat.openai.com/) (coming soon)
 
 ## Supported Languages
 
-Currently, only Russian language is supported.<br>
-But soon, Ukranian and English will be added for the interface, wake-word detection and speech recognition.
+Interface translations are available for Russian, English and Ukrainian
+(`crates/jarvis-core/src/i18n/locales`).<br>
+The language is auto-detected from the system locale and can be changed at runtime.
+
+## Testing
+
+Unit tests live next to the code in `#[cfg(test)]` modules. Run them with:
+
+```sh
+cargo test -p jarvis-core --lib
+```
+
+On Linux, linking the test binary requires the native Vosk library (`libvosk.so`).
 
 ## How to build?
 

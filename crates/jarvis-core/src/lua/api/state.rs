@@ -1,13 +1,13 @@
 // State Lua API: persistent key-value storage per command
 
 use mlua::{Lua, Table, Result, Value};
-use std::path::PathBuf;
+use std::path::Path;
 use std::fs;
 use std::collections::HashMap;
 
 const STATE_FILE: &str = ".state.json";
 
-pub fn register(lua: &Lua, jarvis: &Table, command_path: &PathBuf) -> mlua::Result<()> {
+pub fn register(lua: &Lua, jarvis: &Table, command_path: &Path) -> mlua::Result<()> {
     let state = lua.create_table()?;
     let state_path = command_path.join(STATE_FILE);
     
@@ -90,7 +90,7 @@ pub fn register(lua: &Lua, jarvis: &Table, command_path: &PathBuf) -> mlua::Resu
     Ok(())
 }
 
-fn load_state(path: &PathBuf) -> HashMap<String, serde_json::Value> {
+fn load_state(path: &Path) -> HashMap<String, serde_json::Value> {
     if !path.exists() {
         return HashMap::new();
     }
@@ -101,7 +101,7 @@ fn load_state(path: &PathBuf) -> HashMap<String, serde_json::Value> {
         .unwrap_or_default()
 }
 
-fn save_state(path: &PathBuf, data: &HashMap<String, serde_json::Value>) -> mlua::Result<()> {
+fn save_state(path: &Path, data: &HashMap<String, serde_json::Value>) -> mlua::Result<()> {
     let json = serde_json::to_string_pretty(data)
         .map_err(|e| mlua::Error::runtime(e.to_string()))?;
     

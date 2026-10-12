@@ -95,17 +95,31 @@ fn build_intent_vectors(
             let embeddings = model.embedding.lock().embed(texts, None)
                 .map_err(|e| format!("Embedding failed for '{}': {}", cmd.id, e))?;
 
+            // defensive: skip commands whose phrases produced no embeddings
+            if embeddings.is_empty() || embeddings[0].is_empty() {
+                warn!("No embeddings produced for command '{}'; skipping", cmd.id);
+                continue;
+            }
+
             // average all phrase vectors into one intent vector
             let dim = embeddings[0].len();
             let mut avg = vec![0.0f32; dim];
             
             for emb in &embeddings {
+                // guard against ragged embeddings
+                if emb.len() != dim {
+                    warn!("Inconsistent embedding dimensions for command '{}'; skipping", cmd.id);
+                    continue;
+                }
                 for (i, val) in emb.iter().enumerate() {
                     avg[i] += val;
                 }
             }
             
             let count = embeddings.len() as f32;
+            if count == 0.0 {
+                continue;
+            }
             for val in &mut avg {
                 *val /= count;
             }
@@ -130,6 +144,11 @@ fn build_intent_vectors(
 
 pub fn classify(text: &str) -> Result<(String, f64), String> {
     let state = CLASSIFIER.get().ok_or("Classifier not initialized")?;
+    
+    // nothing to match against
+    if state.intents.is_empty() {
+        return Err("No intents available for classification".to_string());
+    }
     
     // only the embedding model needs locking, intents are read-only
     let embeddings = state.model.embedding.lock().embed(vec![text], None)

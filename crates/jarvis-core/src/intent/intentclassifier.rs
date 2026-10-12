@@ -58,7 +58,9 @@ pub async fn init(commands: &[JCommandsList]) -> Result<(), String> {
 }
 
 pub async fn classify(text: &str) -> Result<IntentPrediction, IntentError> {
-    let model = MODEL.get().expect("IntentClassifier not initialized");
+    let model = MODEL.get().ok_or_else(|| {
+        IntentError::ClassificationFailed("IntentClassifier not initialized".to_string())
+    })?;
     model.classifier.predict_intent(text).await
 }
 

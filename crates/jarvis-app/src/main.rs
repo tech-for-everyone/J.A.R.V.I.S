@@ -109,7 +109,9 @@ fn main() -> Result<(), String> {
     });
 
     // init slots parsing engine
-    slots::init().map_err(|e| error!("Slot extraction init failed: {}", e)).ok();
+    if let Err(e) = slots::init() {
+        error!("Slot extraction init failed: {}", e);
+    }
 
     // init audio processing
     info!("Initializing audio processing...");
@@ -147,7 +149,6 @@ fn main() -> Result<(), String> {
             IpcAction::Ping => {
                 // handled internally by server
             }
-            _ => {}
         }
     });
 

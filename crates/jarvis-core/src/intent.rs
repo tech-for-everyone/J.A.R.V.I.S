@@ -15,7 +15,13 @@ pub async fn init(commands: &Vec<JCommandsList>) -> Result<(), String> {
         return Ok(());
     }
 
-    let backend = DB.get().unwrap().read().intent_backend.clone();
+    let backend = match DB.get() {
+        Some(db) => db.read().intent_backend.clone(),
+        None => {
+            warn!("Settings are not initialized; intent recognition disabled");
+            "none".to_string()
+        }
+    };
 
     BACKEND.set(backend.clone()).map_err(|_| "Backend already set")?;
 

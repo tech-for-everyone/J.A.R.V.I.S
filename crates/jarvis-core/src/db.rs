@@ -1,9 +1,9 @@
 pub mod structs;
 pub mod manager;
 
-use crate::{config, APP_CONFIG_DIR};
+use crate::{config, APP_CONFIG_DIR, APP_DIR};
 
-use log::info;
+use log::{info, warn};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -11,11 +11,14 @@ use std::path::PathBuf;
 pub use manager::SettingsManager;
 
 fn get_db_file_path() -> PathBuf {
-    PathBuf::from(format!(
-        "{}/{}",
-        APP_CONFIG_DIR.get().unwrap().display(),
-        config::DB_FILE_NAME
-    ))
+    match APP_CONFIG_DIR.get() {
+        Some(config_dir) => config_dir.join(config::DB_FILE_NAME),
+        None => {
+            // init_dirs() was not called; fall back to the application directory
+            warn!("Config directory not set, storing settings next to the executable");
+            APP_DIR.join(config::DB_FILE_NAME)
+        }
+    }
 }
 
 pub fn init_settings() -> structs::Settings {

@@ -10,6 +10,19 @@ use crate::DB;
 
 static PROCESSOR: OnceCell<Mutex<AudioProcessor>> = OnceCell::new();
 
+/// Root-mean-square amplitude of 16-bit PCM samples.
+///
+/// Shared by the energy VAD and the gain normalizer to avoid duplicating the
+/// same accumulation math in both.
+pub fn calculate_rms(samples: &[i16]) -> f32 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+
+    let sum: f64 = samples.iter().map(|&s| (s as f64) * (s as f64)).sum();
+    (sum / samples.len() as f64).sqrt() as f32
+}
+
 #[derive(Debug, Clone)]
 pub struct ProcessedAudio {
     pub samples: Vec<i16>,
@@ -100,6 +113,41 @@ pub fn process(input: &[i16]) -> ProcessedAudio {
 pub fn reset() {
     if let Some(p) = PROCESSOR.get() {
         p.lock().reset();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::calculate_rms;
+
+    #[test]
+    fn rms_of_empty_is_zero() {
+        assert_eq!(calculate_rms(&[]), 0.0);
+    }
+
+    #[test]
+    fn rms_of_constant_signal_equals_amplitude() {
+        let samples = vec![1000i16; 256];
+        assert!((calculate_rms(&samples) - 1000.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn rms_of_sine_is_amplitude_over_sqrt2() {
+        let amplitude = 10_000.0f32;
+        let samples: Vec<i16> = (0..2048)
+            .map(|i| {
+                let t = i as f32 / 2048.0 * std::f32::consts::TAU;
+                (t.sin() * amplitude) as i16
+            })
+            .collect();
+        let expected = amplitude / std::f32::consts::SQRT_2;
+        let rms = calculate_rms(&samples);
+        assert!(
+            (rms - expected).abs() < 50.0,
+            "rms {} is not close to {}",
+            rms,
+            expected
+        );
     }
 }
 

@@ -14,7 +14,13 @@ pub fn init() -> Result<(), String> {
         return Ok(());
     }
 
-    let engine = DB.get().unwrap().read().wake_word_engine;
+    let engine = match DB.get() {
+        Some(db) => db.read().wake_word_engine,
+        None => {
+            warn!("Settings are not initialized; using the default wake word engine");
+            crate::config::DEFAULT_WAKE_WORD_ENGINE
+        }
+    };
 
     WAKE_WORD_ENGINE.set(engine)
         .map_err(|_| "Wake word engine already set".to_string())?;

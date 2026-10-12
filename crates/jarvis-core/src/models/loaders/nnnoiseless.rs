@@ -57,6 +57,12 @@ impl NnnoiselessNS {
     }
 }
 
+impl Default for NnnoiselessNS {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // VAD instance
 pub struct NnnoiselessVAD {
     state: Box<DenoiseState<'static>>,
@@ -106,5 +112,11 @@ impl NnnoiselessVAD {
     pub fn reset(&mut self) {
         self.state = DenoiseState::new();
         self.buffer.clear();
+    }
+}
+
+impl Default for NnnoiselessVAD {
+    fn default() -> Self {
+        Self::new()
     }
 }

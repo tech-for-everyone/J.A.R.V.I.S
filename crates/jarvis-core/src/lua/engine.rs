@@ -1,5 +1,5 @@
 use mlua::{Lua, Value, StdLib};
-use std::path::PathBuf;
+use std::path::Path;
 use std::time::Duration;
 use std::fs;
 
@@ -101,7 +101,7 @@ impl LuaEngine {
     // Main LUA executor
     pub fn execute(
         &self,
-        script_path: &PathBuf,
+        script_path: &Path,
         context: CommandContext,
         timeout: Duration,
     ) -> Result<CommandResult, LuaError> {
@@ -113,9 +113,8 @@ impl LuaEngine {
             .map_err(|e| LuaError::LoadError(format!("{}: {}", script_path.display(), e)))?;
         
         let script_name = script_path.file_name()
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| script_path.display().to_string());
 
 
         // set up timeout hook
@@ -137,7 +136,7 @@ impl LuaEngine {
             .eval::<Value>();
         
         // remove hook
-        let _ = self.lua.remove_hook();
+        self.lua.remove_hook();
 
         // result
         match result {

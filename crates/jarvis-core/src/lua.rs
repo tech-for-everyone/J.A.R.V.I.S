@@ -10,7 +10,7 @@ pub use engine::LuaEngine;
 pub use sandbox::SandboxLevel;
 pub use error::LuaError;
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::time::Duration;
 
 #[cfg(test)]
@@ -18,7 +18,7 @@ mod tests;
 
 // Execute a Lua command script
 pub fn execute(
-    script_path: &PathBuf,
+    script_path: &Path,
     context: CommandContext,
     sandbox: SandboxLevel,
     timeout: Duration,

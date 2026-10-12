@@ -1,12 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 // Sandbox level controlling what APIs are available
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SandboxLevel {
     // Minimal: only core APIs (log, speak, audio, context)
     Minimal,
 
     // Standard: + http, state, fs (command folder only)
+    #[default]
     Standard,
 
     // Full: + system.exec, expanded fs access
@@ -14,6 +15,7 @@ pub enum SandboxLevel {
 }
 
 impl SandboxLevel {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "minimal" => SandboxLevel::Minimal,
@@ -55,11 +57,5 @@ impl SandboxLevel {
     // Can access paths outside command folder
     pub fn allows_expanded_paths(&self) -> bool {
         matches!(self, SandboxLevel::Full)
-    }
-}
-
-impl Default for SandboxLevel {
-    fn default() -> Self {
-        SandboxLevel::Standard
     }
 }

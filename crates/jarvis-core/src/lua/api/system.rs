@@ -11,8 +11,11 @@ pub fn register(lua: &Lua, jarvis: &Table, sandbox: SandboxLevel) -> mlua::Resul
     // jarvis.system.open(url_or_path) - always available
     let open_fn = lua.create_function(|_, target: String| {
         let result = if cfg!(target_os = "windows") {
-            Command::new("cmd")
-                .args(["/C", "start", "", &target])
+            // Avoid going through `cmd /C start`, which would re-interpret
+            // shell metacharacters in the (untrusted) target string.
+            Command::new("rundll32")
+                .arg("url.dll,FileProtocolHandler")
+                .arg(&target)
                 .spawn()
         } else if cfg!(target_os = "macos") {
             Command::new("open")
@@ -49,10 +52,8 @@ pub fn register(lua: &Lua, jarvis: &Table, sandbox: SandboxLevel) -> mlua::Resul
             
             // add extra args if provided
             if let Some(args_table) = args {
-                for pair in args_table.sequence_values::<String>() {
-                    if let Ok(arg) = pair {
-                        command.arg(arg);
-                    }
+                for arg in args_table.sequence_values::<String>().flatten() {
+                    command.arg(arg);
                 }
             }
             

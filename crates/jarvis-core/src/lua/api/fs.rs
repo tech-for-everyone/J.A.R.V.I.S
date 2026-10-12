@@ -9,12 +9,12 @@ use crate::lua::sandbox::SandboxLevel;
 pub fn register(
     lua: &Lua,
     jarvis: &Table,
-    command_path: &PathBuf,
+    command_path: &Path,
     sandbox: SandboxLevel,
 ) -> mlua::Result<()> {
     let fs_table = lua.create_table()?;
     
-    let cmd_path = command_path.clone();
+    let cmd_path = command_path.to_path_buf();
     let sandbox_level = sandbox;
     
     // jarvis.fs.read(path)
@@ -35,7 +35,7 @@ pub fn register(
         let bytes = fs::read(&full_path)
             .map_err(|e| mlua::Error::runtime(format!("Read error: {}", e)))?;
         
-        Ok(lua.create_string(&bytes)?)
+        lua.create_string(&bytes)
     })?;
     fs_table.set("read_bytes", read_bytes_fn)?;
     
@@ -118,24 +118,20 @@ pub fn register(
         };
         
         let result = lua.create_table()?;
-        
+
         let entries = fs::read_dir(&full_path)
             .map_err(|e| mlua::Error::runtime(format!("List error: {}", e)))?;
-        
-        let mut idx = 1;
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let item = lua.create_table()?;
-                item.set("name", entry.file_name().to_string_lossy().to_string())?;
-                item.set("path", entry.path().to_string_lossy().to_string())?;
-                item.set("is_file", entry.path().is_file())?;
-                item.set("is_dir", entry.path().is_dir())?;
-                
-                result.set(idx, item)?;
-                idx += 1;
-            }
+
+        for (i, entry) in entries.flatten().enumerate() {
+            let item = lua.create_table()?;
+            item.set("name", entry.file_name().to_string_lossy().to_string())?;
+            item.set("path", entry.path().to_string_lossy().to_string())?;
+            item.set("is_file", entry.path().is_file())?;
+            item.set("is_dir", entry.path().is_dir())?;
+
+            result.set(i + 1, item)?;
         }
-        
+
         Ok(result)
     })?;
     fs_table.set("list", list_fn)?;
@@ -182,10 +178,15 @@ pub fn register(
     Ok(())
 }
 
-// Resolve path relative to command folder, with sandbox checks
-fn resolve_path(command_path: &PathBuf, path: &str, sandbox: SandboxLevel) -> mlua::Result<PathBuf> {
+// Resolve path relative to command folder, with sandbox checks.
+//
+// The containment check must not rely solely on `canonicalize()`, because that
+// fails for paths that do not exist yet (e.g. the target of `fs.write`).
+// We therefore also normalize the path lexically and resolve the closest
+// existing ancestor to catch symlinked directories.
+fn resolve_path(command_path: &Path, path: &str, sandbox: SandboxLevel) -> mlua::Result<PathBuf> {
     let path = Path::new(path);
-    
+
     // if absolute path, check sandbox allows it
     if path.is_absolute() {
         if !sandbox.allows_expanded_paths() {
@@ -193,20 +194,61 @@ fn resolve_path(command_path: &PathBuf, path: &str, sandbox: SandboxLevel) -> ml
         }
         return Ok(path.to_path_buf());
     }
-    
-    // relative path - resolve against command folder
-    let resolved = command_path.join(path);
-    
-    // canonicalize to resolve ../ etc and check it's still within command folder
-    let canonical = resolved.canonicalize()
-        .unwrap_or_else(|_| resolved.clone());
-    
-    let cmd_canonical = command_path.canonicalize()
-        .unwrap_or_else(|_| command_path.clone());
-    
-    if !sandbox.allows_expanded_paths() && !canonical.starts_with(&cmd_canonical) {
-        return Err(mlua::Error::runtime("Path escapes command folder"));
+
+    // resolve the command folder authoritatively (following symlinks)
+    let base = command_path
+        .canonicalize()
+        .unwrap_or_else(|_| command_path.to_path_buf());
+
+    // join, then normalize `..`/`.` lexically so the check cannot be fooled
+    // by a path that does not exist yet.
+    let normalized = lexical_normalize(&base.join(path));
+
+    if !sandbox.allows_expanded_paths() {
+        if !normalized.starts_with(&base) {
+            return Err(mlua::Error::runtime("Path escapes command folder"));
+        }
+
+        // resolve the closest existing ancestor to catch symlinks pointing
+        // outside of the command folder.
+        if let Some(real) = canonicalize_existing_prefix(&normalized) {
+            if !real.starts_with(&base) {
+                return Err(mlua::Error::runtime("Path escapes command folder"));
+            }
+        }
     }
-    
-    Ok(resolved)
+
+    Ok(normalized)
+}
+
+// Remove `.`/`..` components without touching the filesystem.
+fn lexical_normalize(path: &Path) -> PathBuf {
+    use std::path::Component;
+
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                // popping the root is a no-op, which clamps at the filesystem root
+                out.pop();
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
+// Canonicalize the longest existing prefix of `path` (following symlinks).
+fn canonicalize_existing_prefix(path: &Path) -> Option<PathBuf> {
+    let mut current = path.to_path_buf();
+    loop {
+        if current.exists() {
+            return current.canonicalize().ok();
+        }
+        match current.parent() {
+            Some(parent) if parent != current => current = parent.to_path_buf(),
+            _ => return None,
+        }
+    }
 }

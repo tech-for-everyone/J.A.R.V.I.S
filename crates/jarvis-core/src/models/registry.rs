@@ -7,6 +7,7 @@ use super::structs::ModelDef;
 
 // central model registry. loads models once and shares them between components.
 // completely type-agnostic
+#[derive(Default)]
 pub struct ModelRegistry {
     loaded: Mutex<HashMap<String, Arc<dyn Any + Send + Sync>>>,
     catalog: RwLock<Vec<ModelDef>>,
@@ -14,10 +15,7 @@ pub struct ModelRegistry {
 
 impl ModelRegistry {
     pub fn new() -> Self {
-        Self {
-            loaded: Mutex::new(HashMap::new()),
-            catalog: RwLock::new(Vec::new()),
-        }
+        Self::default()
     }
 
     pub fn set_catalog(&self, defs: Vec<ModelDef>) {

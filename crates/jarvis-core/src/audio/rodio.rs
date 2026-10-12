@@ -16,6 +16,7 @@ use rodio::{Decoder, OutputStream, Sink};
 static STREAM_HANDLE: OnceCell<OutputStream> = OnceCell::new();
 static SINK: OnceCell<Sink> = OnceCell::new();
 
+#[allow(clippy::result_unit_err)]
 pub fn init() -> Result<(), ()> {
     if STREAM_HANDLE.get().is_some() {
         return Ok(());
@@ -25,7 +26,7 @@ pub fn init() -> Result<(), ()> {
     match rodio::OutputStreamBuilder::open_default_stream() {
         Ok(stream_handle) => {
             // create sink
-            let sink = Sink::connect_new(&stream_handle.mixer());
+            let sink = Sink::connect_new(stream_handle.mixer());
             info!("Sink initialized.");
 
             // store
@@ -48,7 +49,7 @@ pub fn init() -> Result<(), ()> {
 pub fn play_sound(filename: &PathBuf, sleep: bool) {
     // Load a sound from a file, using a path relative to Cargo.toml
     // let filepath = format!("{PUBLIC_PATH}/sound/{filename}.wav");
-    let file = BufReader::new(File::open(&filename).unwrap());
+    let file = BufReader::new(File::open(filename).unwrap());
 
     // Decode that sound file into a source
     let source = Decoder::new(file).unwrap();

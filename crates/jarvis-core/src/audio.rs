@@ -9,6 +9,7 @@ use crate::{config, DB, SOUND_DIR};
 
 static AUDIO_TYPE: OnceCell<AudioType> = OnceCell::new();
 
+#[allow(clippy::result_unit_err)]
 pub fn init() -> Result<(), ()> {
     if AUDIO_TYPE.get().is_some() {
         return Ok(());

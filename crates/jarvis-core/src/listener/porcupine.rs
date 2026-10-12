@@ -10,10 +10,14 @@ use crate::DB;
 static PORCUPINE: OnceCell<Porcupine> = OnceCell::new();
 
 pub fn init() -> Result<(), ()> {
-    let picovoice_api_key: String;
-
     // retrieve picovoice api key
-    picovoice_api_key = DB.get().unwrap().api_keys.picovoice.clone();
+    let picovoice_api_key = match DB.get() {
+        Some(settings) => settings.read().api_keys.picovoice.clone(),
+        None => {
+            error!("Settings are not initialized; cannot read the Picovoice API key.");
+            return Err(());
+        }
+    };
     if picovoice_api_key.trim().is_empty() {
         warn!("Picovoice API key is not set.");
         return Err(());
@@ -46,7 +50,9 @@ pub fn init() -> Result<(), ()> {
 }
 
 pub fn data_callback(frame_buffer: &[i16]) -> Option<i32> {
-    if let Ok(keyword_index) = PORCUPINE.get().unwrap().process(&frame_buffer) {
+    let porcupine = PORCUPINE.get()?;
+
+    if let Ok(keyword_index) = porcupine.process(frame_buffer) {
         if keyword_index >= 0 {
             return Some(keyword_index);
         }

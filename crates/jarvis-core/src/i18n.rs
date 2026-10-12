@@ -1,4 +1,4 @@
-use fluent_bundle::{FluentBundle, FluentResource, FluentArgs, FluentValue};
+use fluent_bundle::{FluentResource, FluentArgs, FluentValue};
 use fluent_bundle::concurrent::FluentBundle as ConcurrentFluentBundle;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
@@ -26,11 +26,9 @@ pub fn detect_system_language() -> &'static str {
             other => other,
         };
 
-        if SUPPORTED_LANGUAGES.contains(&mapped) {
-            info!("Detected system language: {} (from locale '{}')", mapped, locale);
-            return SUPPORTED_LANGUAGES.iter()
-                .find(|&&l| l == mapped)
-                .unwrap();
+        if let Some(&supported) = SUPPORTED_LANGUAGES.iter().find(|&&l| l == mapped) {
+            info!("Detected system language: {} (from locale '{}')", supported, locale);
+            return supported;
         }
 
         info!("System locale '{}' not supported, using default '{}'", locale, DEFAULT_LANGUAGE);
@@ -47,12 +45,20 @@ static CURRENT_LANG: OnceCell<RwLock<String>> = OnceCell::new();
 
 // Initialize i18n system
 pub fn init(lang: &str) {
-    let bundles = create_bundles();
-    BUNDLES.set(bundles).ok();
-    
+    if BUNDLES.get().is_none() {
+        BUNDLES.set(create_bundles()).ok();
+    }
+
     let lang = if SUPPORTED_LANGUAGES.contains(&lang) { lang } else { DEFAULT_LANGUAGE };
-    CURRENT_LANG.set(RwLock::new(lang.to_string())).ok();
-    
+
+    // allow re-initialization to switch language
+    match CURRENT_LANG.get() {
+        Some(current) => *current.write() = lang.to_string(),
+        None => {
+            CURRENT_LANG.set(RwLock::new(lang.to_string())).ok();
+        }
+    }
+
     info!("i18n initialized with language: {}", lang);
 }
 
@@ -107,9 +113,10 @@ pub fn t_with_args(key: &str, args: Option<&FluentArgs>) -> String {
         None => return key.to_string(),
     };
     
-    let bundle = match bundles.get(&lang) {
+    let bundle = match bundles.get(&lang).or_else(|| bundles.get(DEFAULT_LANGUAGE)) {
         Some(b) => b,
-        None => bundles.get(DEFAULT_LANGUAGE).unwrap(),
+        // no bundles at all (init never ran) - fall back to the raw key
+        None => return key.to_string(),
     };
     
     let msg = match bundle.get_message(key) {
@@ -199,4 +206,46 @@ pub fn get_translations_for(lang: &str) -> HashMap<String, String> {
     }
     
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detect_system_language_is_supported() {
+        let lang = detect_system_language();
+        assert!(
+            SUPPORTED_LANGUAGES.contains(&lang),
+            "detected language is not supported: {}",
+            lang
+        );
+    }
+
+    // i18n state is global, so all stateful checks live in one test
+    // to avoid races between tests running in parallel.
+    #[test]
+    fn init_language_switch_and_fallbacks() {
+        init("ru");
+        assert_eq!(get_language(), "ru");
+
+        set_language("en");
+        assert_eq!(get_language(), "en");
+
+        // unsupported languages fall back to the default
+        set_language("xx");
+        assert_eq!(get_language(), DEFAULT_LANGUAGE);
+
+        // re-initialization switches the language instead of being a no-op
+        init("ua");
+        assert_eq!(get_language(), "ua");
+
+        // unknown keys fall back to the key itself
+        assert_eq!(t("no-such-key-exists"), "no-such-key-exists");
+
+        // each locale produces at least one translation
+        assert!(!get_translations_for("en").is_empty());
+        assert!(!get_translations_for("ru").is_empty());
+        assert!(!get_translations_for("ua").is_empty());
+    }
 }

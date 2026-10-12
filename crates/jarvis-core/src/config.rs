@@ -4,6 +4,7 @@ use structs::RecorderType;
 use structs::SpeechToTextEngine;
 use structs::WakeWordEngine;
 
+#[cfg(feature = "jarvis_app")]
 use once_cell::sync::Lazy;
 use std::env;
 use std::fs;
@@ -28,33 +29,52 @@ pub fn init_dirs() -> Result<(), String> {
     }
 
     // cache_dir, config_dir, data_dir, state_dir
-    APP_DIRS
-        .set(AppDirs::new(Some(BUNDLE_IDENTIFIER), false).unwrap())
-        .unwrap();
+    let app_dirs = AppDirs::new(Some(BUNDLE_IDENTIFIER), false)
+        .ok_or_else(|| "Cannot infer the application directories".to_string())?;
 
     // setup directories
-    let mut config_dir = PathBuf::from(&APP_DIRS.get().unwrap().config_dir);
-    let mut log_dir = PathBuf::from(&APP_DIRS.get().unwrap().config_dir);
+    let mut config_dir = PathBuf::from(&app_dirs.config_dir);
+    let mut log_dir = PathBuf::from(&app_dirs.config_dir);
 
-    // create dirs, if required
+    // create dirs, if required (fall back to the current directory on failure)
     if !config_dir.exists() {
-        if fs::create_dir_all(&config_dir).is_err() {
-            config_dir = env::current_dir().expect("Cannot infer the config directory");
+        if let Err(e) = fs::create_dir_all(&config_dir) {
+            warn!(
+                "Cannot create config directory '{}' ({}). Falling back to the working directory.",
+                config_dir.display(),
+                e
+            );
+            config_dir = env::current_dir()
+                .map_err(|e| format!("Cannot infer the config directory: {}", e))?;
             fs::create_dir_all(&config_dir)
-                .expect("Cannot create config directory, access denied?");
+                .map_err(|e| format!("Cannot create config directory: {}", e))?;
         }
     }
 
     if !log_dir.exists() {
-        if fs::create_dir_all(&log_dir).is_err() {
-            log_dir = env::current_dir().expect("Cannot infer the log directory");
-            fs::create_dir_all(&log_dir).expect("Cannot create log directory, access denied?");
+        if let Err(e) = fs::create_dir_all(&log_dir) {
+            warn!(
+                "Cannot create log directory '{}' ({}). Falling back to the working directory.",
+                log_dir.display(),
+                e
+            );
+            log_dir = env::current_dir()
+                .map_err(|e| format!("Cannot infer the log directory: {}", e))?;
+            fs::create_dir_all(&log_dir)
+                .map_err(|e| format!("Cannot create log directory: {}", e))?;
         }
     }
 
     // store inferred paths
-    APP_CONFIG_DIR.set(config_dir).unwrap();
-    APP_LOG_DIR.set(log_dir).unwrap();
+    APP_DIRS
+        .set(app_dirs)
+        .map_err(|_| "Application directories already set".to_string())?;
+    APP_CONFIG_DIR
+        .set(config_dir)
+        .map_err(|_| "Config directory already set".to_string())?;
+    APP_LOG_DIR
+        .set(log_dir)
+        .map_err(|_| "Log directory already set".to_string())?;
 
     Ok(())
 }
@@ -97,7 +117,7 @@ pub const TRAY_TOOLTIP: &str = "Jarvis Voice Assistant";
 pub const RUSPOTTER_MIN_SCORE: f32 = 0.62;
 
 #[cfg(feature="jarvis_app")]
-pub const RUSTPOTTER_DEFAULT_CONFIG: Lazy<RustpotterConfig> = Lazy::new(|| {
+pub static RUSTPOTTER_DEFAULT_CONFIG: Lazy<RustpotterConfig> = Lazy::new(|| {
     RustpotterConfig {
         fmt: AudioFmt::default(),
         detector: DetectorConfig {

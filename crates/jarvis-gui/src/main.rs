@@ -3,7 +3,6 @@
 
 use jarvis_core::{config, db, i18n, voices, DB, SettingsManager};
 
-#[macro_use]
 extern crate simple_log;
 
 mod events;

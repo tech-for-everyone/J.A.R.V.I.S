@@ -14,6 +14,7 @@ use kira::{
 
 static MANAGER: OnceCell<Mutex<AudioManager>> = OnceCell::new();
 
+#[allow(clippy::result_unit_err)]
 pub fn init() -> Result<(), ()> {
     if MANAGER.get().is_some() {
         return Ok(());

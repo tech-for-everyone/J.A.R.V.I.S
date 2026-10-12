@@ -10,7 +10,7 @@ use std::process::Command;
 #[cfg(target_os="windows")]
 use winit::platform::windows::EventLoopBuilderExtWindows;
 
-use jarvis_core::{config, i18n, voices, ipc::{self, IpcEvent}, SettingsManager};
+use jarvis_core::{i18n, voices, ipc::{self, IpcEvent}, SettingsManager};
 
 const TRAY_ICON_BYTES: &[u8] = include_bytes!("../../../resources/icons/32x32.png");
 
@@ -210,8 +210,12 @@ fn launch_gui() {
     info!("Launching GUI: {:?}", gui_path);
     
     match Command::new(&gui_path).spawn() {
-        Ok(_) => info!("Launched jarvis-gui"),
-        Err(e) => error!("Failed to launch jarvis-gui: {}", e),
+        Ok(_) => {
+            info!("Launched jarvis-gui");
+        }
+        Err(e) => {
+            error!("Failed to launch jarvis-gui: {}", e);
+        }
     }
 }
 

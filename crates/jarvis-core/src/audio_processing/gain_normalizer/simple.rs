@@ -10,7 +10,7 @@ impl GainNormalizer {
     }
 
     pub fn normalize(&mut self, input: &[i16]) -> Vec<i16> {
-        let rms = self.calculate_rms(input);
+        let rms = crate::audio_processing::calculate_rms(input);
         
         if rms < 1.0 {
             return input.to_vec();
@@ -31,17 +31,5 @@ impl GainNormalizer {
 
     pub fn reset(&mut self) {
         self.current_gain = 1.0;
-    }
-
-    fn calculate_rms(&self, samples: &[i16]) -> f32 {
-        if samples.is_empty() {
-            return 0.0;
-        }
-
-        let sum: f64 = samples.iter()
-            .map(|&s| (s as f64).powi(2))
-            .sum();
-
-        (sum / samples.len() as f64).sqrt() as f32
     }
 }

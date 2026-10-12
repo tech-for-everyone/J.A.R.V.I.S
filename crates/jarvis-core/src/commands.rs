@@ -73,7 +73,7 @@ pub fn commands_hash(commands: &[JCommandsList]) -> String {
     let mut all_data: Vec<(&str, _)> = commands.iter()
         .flat_map(|ac| ac.commands.iter().map(|c| (c.id.as_str(), c.get_phrases(&lang))))
         .collect();
-    all_data.sort_by_key(|(id, _)| *id);
+    all_data.sort_unstable_by_key(|(id, _)| *id);
     
     for (id, phrases) in all_data {
         hasher.update(id.as_bytes());
@@ -188,11 +188,24 @@ pub fn execute_cli(cmd: &str, args: &[String]) -> std::io::Result<Child> {
     if cfg!(target_os = "windows") {
         Command::new("cmd").arg("/C").arg(cmd).args(args).spawn()
     } else {
-        Command::new("sh").arg("-c").arg(cmd).args(args).spawn()
+        // POSIX `sh -c <script> <name...>` exposes trailing args as positional
+        // parameters ("$0", ...) rather than passing them to the program run by
+        // the script. Forward all of them explicitly via "$@".
+        if args.is_empty() {
+            Command::new("sh").arg("-c").arg(cmd).spawn()
+        } else {
+            Command::new("sh")
+                .arg("-c")
+                .arg(format!("{} \"$@\"", cmd))
+                .arg(cmd)
+                .args(args)
+                .spawn()
+        }
     }
 }
 
-pub fn execute_command(cmd_path: &PathBuf, cmd_config: &JCommand, phrase: Option<&str>, slots: Option<&HashMap<String, SlotValue>>) -> Result<bool, String> {
+#[cfg_attr(not(feature = "lua"), allow(unused_variables))]
+pub fn execute_command(cmd_path: &Path, cmd_config: &JCommand, phrase: Option<&str>, slots: Option<&HashMap<String, SlotValue>>) -> Result<bool, String> {
     // execute command by the type
     match cmd_config.cmd_type.as_str() {
 
@@ -217,7 +230,16 @@ pub fn execute_command(cmd_path: &PathBuf, cmd_config: &JCommand, phrase: Option
                 exe_path_local.as_path()
             };
 
-            execute_exe(exe_path.to_str().unwrap(), &cmd_config.exe_args)
+            let exe_path = exe_path
+                .to_str()
+                .ok_or_else(|| {
+                    format!(
+                        "AHK executable path is not valid UTF-8: {}",
+                        exe_path.display()
+                    )
+                })?;
+
+            execute_exe(exe_path, &cmd_config.exe_args)
                 .map(|_| true)
                 .map_err(|e| format!("AHK process spawn error: {}", e))
         }
@@ -242,7 +264,7 @@ pub fn execute_command(cmd_path: &PathBuf, cmd_config: &JCommand, phrase: Option
         // other
         _ => {
             error!("Command type unknown: {}", cmd_config.cmd_type);
-            Err(format!("Command type unknown: {}", cmd_config.cmd_type).into())
+            Err(format!("Command type unknown: {}", cmd_config.cmd_type))
         }
     }
 }
@@ -268,7 +290,7 @@ pub fn list_paths(commands: &[JCommandsList]) -> Vec<&Path> {
 
 #[cfg(feature = "lua")]
 fn execute_lua_command(
-    cmd_path: &PathBuf,
+    cmd_path: &Path,
     cmd_config: &JCommand,
     phrase: Option<&str>,
     slots: Option<&HashMap<String, SlotValue>>
@@ -294,9 +316,9 @@ fn execute_lua_command(
     let context = CommandContext {
         phrase: phrase.unwrap_or("").to_string(),
         command_id: cmd_config.id.clone(),
-        command_path: cmd_path.clone(),
+        command_path: cmd_path.to_path_buf(),
         language: i18n::get_language(),
-        slots: slots.map(|s| s.clone()),
+        slots: slots.cloned(),
     };
     
     // get timeout
@@ -315,5 +337,38 @@ fn execute_lua_command(
             error!("Lua command {} failed: {}", cmd_config.id, e);
             Err(e.to_string())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::word_overlap_score;
+
+    #[test]
+    fn word_overlap_empty_input_scores_zero() {
+        assert_eq!(word_overlap_score(&[], &["a", "b"]), 0.0);
+        assert_eq!(word_overlap_score(&["a"], &[]), 0.0);
+        assert_eq!(word_overlap_score(&[], &[]), 0.0);
+    }
+
+    #[test]
+    fn word_overlap_identical_scores_full() {
+        let words = &["hello", "world"];
+        let score = word_overlap_score(words, words);
+        assert!(score > 99.0, "identical phrases should match fully, got {}", score);
+    }
+
+    #[test]
+    fn word_overlap_partial_matches() {
+        // one of two words matches exactly
+        let score = word_overlap_score(&["hello", "there"], &["hello", "world"]);
+        assert!(score > 0.0 && score < 100.0, "partial match should be in (0, 100), got {}", score);
+    }
+
+    #[test]
+    fn word_overlap_fuzzy_words() {
+        // typos still count as matches thanks to the similarity threshold
+        let score = word_overlap_score(&["helo"], &["hello"]);
+        assert!(score > 0.0, "fuzzy word should score above zero, got {}", score);
     }
 }

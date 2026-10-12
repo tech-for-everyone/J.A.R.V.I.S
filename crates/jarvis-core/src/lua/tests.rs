@@ -109,4 +109,45 @@ mod tests {
         
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_sandbox_fs_write_escape_blocked() {
+        let dir = tempdir().unwrap();
+        let script_path = dir.path().join("test.lua");
+
+        // The target does not exist yet, so a naive canonicalize() check
+        // (which fails and falls back to the raw relative path) would
+        // have let this escape the command folder.
+        fs::write(&script_path, r#"
+            local ok = pcall(function()
+                jarvis.fs.write("../../../should-not-be-written", "data")
+            end)
+            if ok then
+                error("write escape should have been blocked")
+            end
+            return true
+        "#).unwrap();
+
+        let context = create_test_context(dir.path().to_path_buf());
+        let result = execute(&script_path, context, SandboxLevel::Standard, Duration::from_secs(5));
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_sandbox_fs_write_inside_command_folder() {
+        let dir = tempdir().unwrap();
+        let script_path = dir.path().join("test.lua");
+
+        fs::write(&script_path, r#"
+            jarvis.fs.write("out.txt", "hello")
+            return true
+        "#).unwrap();
+
+        let context = create_test_context(dir.path().to_path_buf());
+        let result = execute(&script_path, context, SandboxLevel::Standard, Duration::from_secs(5));
+
+        assert!(result.is_ok());
+        assert!(dir.path().join("out.txt").exists());
+    }
 }

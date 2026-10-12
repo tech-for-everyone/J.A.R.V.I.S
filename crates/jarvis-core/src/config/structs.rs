@@ -19,14 +19,14 @@ pub enum SpeechToTextEngine {
     Vosk,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum RecorderType {
     Cpal,
     PvRecorder,
     PortAudio,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum AudioType {
     Rodio,
     Kira,

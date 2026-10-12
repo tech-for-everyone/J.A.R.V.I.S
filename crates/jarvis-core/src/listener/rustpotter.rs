@@ -9,10 +9,8 @@ use crate::config;
 static RUSTPOTTER: OnceCell<Mutex<Rustpotter>> = OnceCell::new();
 
 pub fn init() -> Result<(), ()> {
-    let rustpotter_config = config::RUSTPOTTER_DEFAULT_CONFIG;
-
     // create rustpotter instance
-    match Rustpotter::new(&rustpotter_config) {
+    match Rustpotter::new(&config::RUSTPOTTER_DEFAULT_CONFIG) {
         Ok(mut rinstance) => {
             // success
             // wake word files list
@@ -48,10 +46,10 @@ pub fn init() -> Result<(), ()> {
 }
 
 pub fn data_callback(frame_buffer: &[i16]) -> Option<i32> {
-    let mut lock = RUSTPOTTER.get().unwrap().lock();
-    let rustpotter = lock.as_mut().unwrap();
-    // let detection = rustpotter.process_samples(frame_buffer.to_vec()); // @TODO. Temp crutch. Fix optimization issue, frame_buffer should not be copied to a new vector!
-    let detection = rustpotter.process_samples(frame_buffer);
+    let detector = RUSTPOTTER.get()?;
+    let mut lock = detector.lock().ok()?;
+
+    let detection = lock.process_samples(frame_buffer);
 
     // info!("Ruspotter data callback");
 

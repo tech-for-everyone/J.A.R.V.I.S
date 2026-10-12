@@ -35,26 +35,42 @@ pub fn init_microphone(device_index: i32, frame_length: u32) -> bool {
 
 pub fn read_microphone(frame_buffer: &mut [i16]) {
     // ensure microphone is initialized
-    if RECORDER.get().is_some() {
-        // read to frame buffer
+    let Some(recorder) = RECORDER.get() else {
+        return;
+    };
 
-        let frame = RECORDER.get().unwrap().read();
-
-        match frame {
-            Ok(f) => {
-                frame_buffer.copy_from_slice(f.as_slice());
+    // read to frame buffer
+    match recorder.read() {
+        Ok(f) => {
+            // the device frame length is normally fixed, but be defensive:
+            // never panic if the returned frame differs from the requested buffer.
+            let n = f.len().min(frame_buffer.len());
+            frame_buffer[..n].copy_from_slice(&f[..n]);
+            if n < frame_buffer.len() {
+                frame_buffer[n..].fill(0);
             }
-            Err(msg) => {
-                // @TODO: Fix? PvRecorder always wait for PCM buffer size of 512.
-                error!("Failed to read audio frame. {:?}", msg);
+            if f.len() != frame_buffer.len() {
+                warn!(
+                    "Audio frame length mismatch: got {}, buffer is {}",
+                    f.len(),
+                    frame_buffer.len()
+                );
             }
+        }
+        Err(msg) => {
+            // @TODO: Fix? PvRecorder always wait for PCM buffer size of 512.
+            error!("Failed to read audio frame. {:?}", msg);
         }
     }
 }
 
+#[allow(clippy::result_unit_err)]
 pub fn start_recording(device_index: i32, frame_length: u32) -> Result<(), ()> {
     // ensure microphone is initialized
-    init_microphone(device_index, frame_length);
+    if !init_microphone(device_index, frame_length) {
+        error!("Cannot start recording: microphone initialization failed");
+        return Err(());
+    }
 
     // start recording
     match RECORDER.get().unwrap().start() {

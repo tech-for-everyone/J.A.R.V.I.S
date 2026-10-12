@@ -2,7 +2,6 @@ use std::sync::mpsc::Receiver;
 use std::time::SystemTime;
 
 use jarvis_core::{audio_buffer::AudioRingBuffer, audio_processing, commands, config, listener, recorder, stt, COMMANDS_LIST, intent, voices, ipc::{self, IpcEvent}, i18n, slots};
-use rand::seq::SliceRandom;
 
 use crate::should_stop;
 
@@ -36,8 +35,12 @@ fn main_loop(text_cmd_rx: Receiver<String>, rt: &tokio::runtime::Runtime) -> Res
     voices::play_greet();
 
     match recorder::start_recording() {
-        Ok(_) => info!("Recording started. Microphone: {}", 
-            recorder::get_audio_device_name(recorder::get_selected_microphone_index())),
+        Ok(_) => {
+            info!(
+                "Recording started. Microphone: {}",
+                recorder::get_audio_device_name(recorder::get_selected_microphone_index())
+            );
+        }
         Err(_) => {
             error!("Cannot start recording.");
             return Err(());
