@@ -14,7 +14,6 @@ import filecmp
 SOURCE = (
     ("resources/commands/", "resources/commands/"),
     ("resources/vosk/", "resources/vosk/"),
-    ("resources/lib/", "lib/"),
     ("resources/keywords/", "resources/keywords/"),
     ("resources/rustpotter/", "resources/rustpotter/"),
     ("resources/sound/", "resources/sound/"),
